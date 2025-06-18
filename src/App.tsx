@@ -286,12 +286,12 @@ export default function App() {
             <SearchableDropdown label={LABELS.PROJECT} options={availableProjects} value={selectedProject} onChange={setSelectedProject} placeholder="-- Select Project --" disabled={!selectedBrand}/>
             <SearchableDropdown label={LABELS.MEDIUM} options={mediums} value={selectedMedium} onChange={setSelectedMedium} placeholder="-- Select Medium --" />
             <SearchableDropdown label={LABELS.MATERIAL} options={materials} value={selectedMaterial} onChange={setSelectedMaterial} placeholder="-- Select Material --" />
-            <div><label className="mb-2 text-sm font-medium text-gray-500">Year</label><select value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)} className="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5">{[...Array(8)].map((_, i) => new Date().getFullYear() + 2 - i).map(y => <option key={y} value={y}>{y}</option>)}</select></div>
+            <div><label className="mb-2 text-sm font-medium text-gray-500">Año</label><select value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)} className="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5">{[...Array(8)].map((_, i) => new Date().getFullYear() + 2 - i).map(y => <option key={y} value={y}>{y}</option>)}</select></div>
           </div>
           
           <div className="mb-8">
-            <label className="text-sm font-medium text-gray-500">Description Components</label>
-            {customTextParts.map((part, index) => (<div key={index} className="flex items-center gap-2 mt-2"><input type="text" value={part} onChange={(e) => handlePartChange(index, e.target.value)} placeholder={`Component ${index + 1}`} className="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5" /><button onClick={index === customTextParts.length - 1 ? handleAddPart : () => handleRemovePart(index)} className={`flex-shrink-0 w-10 h-10 flex items-center justify-center font-bold rounded-lg transition-colors text-white ${index === customTextParts.length - 1 ? 'bg-[#eb1564] hover:opacity-90' : 'bg-gray-500 hover:bg-gray-600'}`}>{index === customTextParts.length - 1 ? '+' : '−'}</button></div>))}
+            <label className="text-sm font-medium text-gray-500">Nombre o Variable</label>
+            {customTextParts.map((part, index) => (<div key={index} className="flex items-center gap-2 mt-2"><input type="text" value={part} onChange={(e) => handlePartChange(index, e.target.value)} placeholder={`Variable ${index + 1}`} className="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5" /><button onClick={index === customTextParts.length - 1 ? handleAddPart : () => handleRemovePart(index)} className={`flex-shrink-0 w-10 h-10 flex items-center justify-center font-bold rounded-lg transition-colors text-white ${index === customTextParts.length - 1 ? 'bg-[#eb1564] hover:opacity-90' : 'bg-gray-500 hover:bg-gray-600'}`}>{index === customTextParts.length - 1 ? '+' : '−'}</button></div>))}
           </div>
 
           <div className="bg-gray-100 p-6 rounded-xl border border-gray-200">
