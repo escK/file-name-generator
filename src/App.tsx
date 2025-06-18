@@ -266,7 +266,7 @@ export default function App() {
       <div className="w-full max-w-5xl mx-auto">
         <header className="text-center mb-10 flex items-center justify-center gap-4">
           <img src={LOGO_URL} alt="Logo" className="h-12 w-12 object-contain" />
-          <h1 className="text-4xl font-bold text-gray-800">Filename Generator</h1>
+          <h1 className="text-4xl font-bold text-[#eb1564]">Filename Generator</h1>
         </header>
         
         <main className="bg-gray-50/50 p-6 sm:p-8 rounded-2xl shadow-lg border border-gray-200">
