@@ -1,5 +1,43 @@
 import React, { useState, useEffect, useRef } from 'react';
 
+// --- TYPE DEFINITIONS for TypeScript ---
+interface Project {
+  name: string;
+  abbr: string;
+}
+
+interface BrandData {
+  abbr: string;
+  projects: Project[];
+}
+
+interface HierarchyData {
+  [clientName: string]: {
+    abbr: string;
+    brands: {
+      [brandName: string]: BrandData;
+    };
+  };
+}
+
+interface ListData {
+  name: string;
+  abbr: string;
+}
+
+interface Preset {
+    name: string;
+    values: {
+        selectedClient: string;
+        selectedBrand: string;
+        selectedProject: string;
+        selectedMedium: string;
+        selectedMaterial: string;
+        selectedYear: string;
+        customTextParts: string[];
+    };
+}
+
 // --- CONFIGURATION ---
 const LABELS = {
   CLIENT: 'Client',
@@ -16,14 +54,13 @@ const SHEET_NAMES = {
   MATERIAL: 'Materials',
 };
 
-// The logo is now a local file in the 'public' folder.
 const LOGO_URL = '/logo.png';
 
-const buildSheetUrl = (sheetName) => `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
+const buildSheetUrl = (sheetName: string): string => `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
 
 // --- DATA PARSING HELPERS ---
-const parseHierarchyData = (csv) => {
-  const data = {};
+const parseHierarchyData = (csv: string): HierarchyData => {
+  const data: HierarchyData = {};
   const rows = csv.trim().split(/\r?\n/).slice(1);
   rows.filter(row => row.trim() && !row.trim().startsWith('"#')).forEach(row => {
     const cols = (row.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g) || []).map(c => c.trim().replace(/^"|"$/g, ''));
@@ -38,7 +75,7 @@ const parseHierarchyData = (csv) => {
   return data;
 };
 
-const parseListData = (csv) => {
+const parseListData = (csv: string): ListData[] => {
   const rows = csv.trim().split(/\r?\n/).slice(1);
   return rows.filter(row => row.trim() && !row.trim().startsWith('"#')).map(row => {
     const cols = (row.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g) || []).map(c => c.trim().replace(/^"|"$/g, ''));
@@ -48,23 +85,32 @@ const parseListData = (csv) => {
 };
 
 // --- REUSABLE UI COMPONENTS ---
-const SearchableDropdown = ({ options, value, onChange, placeholder, label, disabled = false }) => {
+interface SearchableDropdownProps {
+  options: (string | Project | ListData)[];
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  label: string;
+  disabled?: boolean;
+}
+
+const SearchableDropdown: React.FC<SearchableDropdownProps> = ({ options, value, onChange, placeholder, label, disabled = false }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const dropdownRef = useRef(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const isObjectArray = options.length > 0 && typeof options[0] === 'object';
-  const getOptionName = (option) => isObjectArray ? option.name : option;
+  const getOptionName = (option: string | Project | ListData) => isObjectArray ? (option as Project | ListData).name : (option as string);
   const filteredOptions = options.filter(option => getOptionName(option).toLowerCase().includes(searchTerm.toLowerCase()));
 
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) setIsOpen(false);
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) setIsOpen(false);
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleSelect = (option) => {
+  const handleSelect = (option: string | Project | ListData) => {
     onChange(getOptionName(option));
     setIsOpen(false);
     setSearchTerm('');
@@ -96,24 +142,24 @@ const SearchableDropdown = ({ options, value, onChange, placeholder, label, disa
 
 // --- MAIN APP COMPONENT ---
 export default function App() {
-  const [hierarchyData, setHierarchyData] = useState({});
-  const [mediums, setMediums] = useState([]);
-  const [materials, setMaterials] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [selectedClient, setSelectedClient] = useState('');
-  const [selectedBrand, setSelectedBrand] = useState('');
-  const [selectedProject, setSelectedProject] = useState('');
-  const [selectedMedium, setSelectedMedium] = useState('');
-  const [selectedMaterial, setSelectedMaterial] = useState('');
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
-  const [customTextParts, setCustomTextParts] = useState(['']);
-  const [availableBrands, setAvailableBrands] = useState([]);
-  const [availableProjects, setAvailableProjects] = useState([]);
-  const [generatedName, setGeneratedName] = useState('');
-  const [copySuccess, setCopySuccess] = useState('');
-  const [presets, setPresets] = useState({});
-  const [presetName, setPresetName] = useState('');
+  const [hierarchyData, setHierarchyData] = useState<HierarchyData>({});
+  const [mediums, setMediums] = useState<ListData[]>([]);
+  const [materials, setMaterials] = useState<ListData[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedClient, setSelectedClient] = useState<string>('');
+  const [selectedBrand, setSelectedBrand] = useState<string>('');
+  const [selectedProject, setSelectedProject] = useState<string>('');
+  const [selectedMedium, setSelectedMedium] = useState<string>('');
+  const [selectedMaterial, setSelectedMaterial] = useState<string>('');
+  const [selectedYear, setSelectedYear] = useState<string>(new Date().getFullYear().toString());
+  const [customTextParts, setCustomTextParts] = useState<string[]>(['']);
+  const [availableBrands, setAvailableBrands] = useState<string[]>([]);
+  const [availableProjects, setAvailableProjects] = useState<Project[]>([]);
+  const [generatedName, setGeneratedName] = useState<string>('');
+  const [copySuccess, setCopySuccess] = useState<string>('');
+  const [presets, setPresets] = useState<{ [key: string]: Preset }>({});
+  const [presetName, setPresetName] = useState<string>('');
 
   useEffect(() => {
     try {
@@ -129,7 +175,7 @@ export default function App() {
             setHierarchyData(parseHierarchyData(hierarchyCsv));
             setMediums(parseListData(mediumCsv));
             setMaterials(parseListData(materialCsv));
-        } catch (err) { setError(err.message); } 
+        } catch (err: any) { setError(err.message); } 
         finally { setIsLoading(false); }
     };
     fetchData();
@@ -146,26 +192,26 @@ export default function App() {
   }, [selectedBrand, selectedClient, hierarchyData]);
   
   useEffect(() => {
-    const getAbbr = (value, list) => (list.find(item => item.name === value)?.abbr || value).toUpperCase();
+    const getAbbr = (value: string, list: ListData[]) => (list.find(item => item.name === value)?.abbr || value).toUpperCase();
     const clientAbbr = (hierarchyData[selectedClient]?.abbr || selectedClient).toUpperCase();
     const brandAbbr = (hierarchyData[selectedClient]?.brands[selectedBrand]?.abbr || selectedBrand).toUpperCase();
-    const projectAbbr = ((hierarchyData[selectedClient]?.brands[selectedBrand]?.projects || []).find(p => p.name === selectedProject)?.abbr || selectedProject).toUpperCase();
-    const formatPart = (part) => (part || '').trim().replace(/\s+/g, '-').toUpperCase();
+    const projectAbbr = (availableProjects.find(p => p.name === selectedProject)?.abbr || selectedProject).toUpperCase();
+    const formatPart = (part: string) => (part || '').trim().replace(/\s+/g, '-').toUpperCase();
     const formattedCustomParts = customTextParts.map(formatPart).filter(p => p);
     const parts = [ clientAbbr, brandAbbr, projectAbbr, selectedYear, getAbbr(selectedMedium, mediums), getAbbr(selectedMaterial, materials), ...formattedCustomParts, ];
-    setGeneratedName(parts.filter(p => p && p !== 'N/A').join('_'));
-  }, [selectedClient, selectedBrand, selectedProject, selectedYear, selectedMedium, selectedMaterial, customTextParts, hierarchyData, mediums, materials]);
+    setGeneratedName(parts.filter(p => p && p.toUpperCase() !== 'N/A').join('_'));
+  }, [selectedClient, selectedBrand, selectedProject, selectedYear, selectedMedium, selectedMaterial, customTextParts, hierarchyData, mediums, materials, availableProjects]);
 
   const handleSavePreset = () => {
     if (!presetName.trim()) { alert("Please enter a name for the preset."); return; }
-    const newPreset = { name: presetName, values: { selectedClient, selectedBrand, selectedProject, selectedMedium, selectedMaterial, selectedYear, customTextParts } };
+    const newPreset: Preset = { name: presetName, values: { selectedClient, selectedBrand, selectedProject, selectedMedium, selectedMaterial, selectedYear, customTextParts } };
     const updatedPresets = { ...presets, [presetName]: newPreset };
     setPresets(updatedPresets);
     localStorage.setItem('fileNameGeneratorPresets', JSON.stringify(updatedPresets));
     setPresetName('');
   };
 
-  const handleLoadPreset = (name) => {
+  const handleLoadPreset = (name: string) => {
     const preset = presets[name];
     if (!preset) return;
     const { values } = preset;
@@ -182,15 +228,15 @@ export default function App() {
     setCustomTextParts(values.customTextParts || ['']);
   };
 
-  const handleDeletePreset = (name) => {
+  const handleDeletePreset = (name: string) => {
       const { [name]: _, ...remainingPresets } = presets;
       setPresets(remainingPresets);
       localStorage.setItem('fileNameGeneratorPresets', JSON.stringify(remainingPresets));
   };
   
   const handleAddPart = () => setCustomTextParts([...customTextParts, '']);
-  const handleRemovePart = (i) => setCustomTextParts(customTextParts.filter((_, idx) => idx !== i));
-  const handlePartChange = (i, val) => setCustomTextParts(customTextParts.map((p, idx) => (idx === i ? val : p)));
+  const handleRemovePart = (i: number) => setCustomTextParts(customTextParts.filter((_, idx) => idx !== i));
+  const handlePartChange = (i: number, val: string) => setCustomTextParts(customTextParts.map((p, idx) => (idx === i ? val : p)));
   
   const handleCopy = () => {
       if (!generatedName) return;
