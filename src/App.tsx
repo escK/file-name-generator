@@ -160,6 +160,7 @@ export default function App() {
   const [copySuccess, setCopySuccess] = useState<string>('');
   const [presets, setPresets] = useState<{ [key: string]: Preset }>({});
   const [presetName, setPresetName] = useState<string>('');
+  const isLoadingPreset = useRef<boolean>(false); // Ref to "lock" effects during preset load
 
   useEffect(() => {
     try {
@@ -182,11 +183,13 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (isLoadingPreset.current) return; // Don't reset if a preset is being loaded
     setAvailableBrands(selectedClient ? Object.keys(hierarchyData[selectedClient]?.brands || {}) : []);
     setSelectedBrand('');
   }, [selectedClient, hierarchyData]);
 
   useEffect(() => {
+    if (isLoadingPreset.current) return; // Don't reset if a preset is being loaded
     setAvailableProjects(selectedBrand ? hierarchyData[selectedClient]?.brands[selectedBrand]?.projects || [] : []);
     setSelectedProject('');
   }, [selectedBrand, selectedClient, hierarchyData]);
@@ -214,18 +217,22 @@ export default function App() {
   const handleLoadPreset = (name: string) => {
     const preset = presets[name];
     if (!preset) return;
+
+    isLoadingPreset.current = true; // --- LOCK effects
+
     const { values } = preset;
     setSelectedClient(values.selectedClient || '');
-    setTimeout(() => {
-        setSelectedBrand(values.selectedBrand || '');
-        setTimeout(() => {
-            setSelectedProject(values.selectedProject || '');
-        }, 0);
-    }, 0);
+    setSelectedBrand(values.selectedBrand || '');
+    setSelectedProject(values.selectedProject || '');
     setSelectedMedium(values.selectedMedium || '');
     setSelectedMaterial(values.selectedMaterial || '');
     setSelectedYear(values.selectedYear || new Date().getFullYear().toString());
     setCustomTextParts(values.customTextParts || ['']);
+    
+    // Use a timeout to unlock effects AFTER all state updates have been processed
+    setTimeout(() => {
+        isLoadingPreset.current = false;
+    }, 50);
   };
 
   const handleDeletePreset = (name: string) => {
