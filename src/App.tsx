@@ -369,7 +369,7 @@ export default function App() {
       <div className="w-full max-w-5xl mx-auto">
         {/* NEW: Updated header layout */}
         <header className="text-center mb-10 flex flex-col items-center justify-center gap-4">
-          <img src={LOGO_URL} alt="Logo" className="h-60 w-60 object-contain" />
+          <img src={LOGO_URL} alt="Logo" className="h-24 w-auto object-contain" />
           <h1 className="text-4xl font-bold text-[#eb1564]">{TEXTS.TITLE}</h1>
         </header>
         
