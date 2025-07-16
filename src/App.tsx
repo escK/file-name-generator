@@ -1,54 +1,16 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, FC } from 'react';
+// NEW: Import Firebase services
+import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut, User } from 'firebase/auth';
+import { auth } from './firebase'; // Your newly created firebase config file
 
 // --- TYPE DEFINITIONS for TypeScript ---
-// These interfaces define the "shape" of our data for type safety.
-
-// Defines a single project with its name and abbreviation.
-interface Project {
-  name: string;
-  abbr: string;
-}
-
-// Defines a brand, which has an abbreviation and a list of projects.
-interface BrandData {
-  abbr:string;
-  projects: Project[];
-}
-
-// Defines the main data structure, mapping client names to their data.
-interface HierarchyData {
-  [clientName: string]: {
-    abbr: string;
-    brands: {
-      [brandName: string]: BrandData;
-    };
-  };
-}
-
-// Defines the structure for simple lists like Mediums and Materials.
-interface ListData {
-  name: string;
-  abbr: string;
-}
-
-// Defines the structure for a saved preset.
-interface Preset {
-    name: string;
-    values: {
-        selectedClient: string;
-        selectedBrand: string;
-        selectedProject: string;
-        selectedMedium: string;
-        selectedMaterial: string;
-        sizeWidth: string;
-        sizeHeight: string;
-        sizeUnit: string;
-        customTextParts: string[];
-    };
-}
+interface Project { name: string; abbr: string; }
+interface BrandData { abbr:string; projects: Project[]; }
+interface HierarchyData { [clientName: string]: { abbr: string; brands: { [brandName: string]: BrandData; }; }; }
+interface ListData { name: string; abbr: string; }
+interface Preset { name: string; values: { selectedClient: string; selectedBrand: string; selectedProject: string; selectedMedium: string; selectedMaterial: string; sizeWidth: string; sizeHeight: string; sizeUnit: string; customTextParts: string[]; }; }
 
 // --- CONFIGURATION & TEXTS ---
-// All user-facing text is stored here for easy translation and modification.
 const TEXTS = {
   TITLE: 'Generador de Nombres de Archivo',
   CLIENT: 'Cliente',
@@ -79,17 +41,19 @@ const TEXTS = {
   ERROR_LOADING: 'Error al cargar los datos. Revisa la URL de la hoja de cálculo y los permisos.',
   CHAR_LIMIT_WARNING_PREFIX: 'El nombre del archivo (',
   CHAR_LIMIT_WARNING_SUFFIX: ' caracteres) excede el límite recomendado. Puede causar problemas en algunos sistemas.',
+  LOGIN_TITLE: 'Acceso Restringido',
+  LOGIN_BUTTON: 'Ingresar con Google',
+  LOGOUT_BUTTON: 'Cerrar Sesión',
+  ACCESS_DENIED_TITLE: 'Acceso Denegado',
+  ACCESS_DENIED_MESSAGE: 'No tienes permiso para usar esta herramienta. Por favor, contacta al administrador.',
+  AUTH_LOADING: 'Verificando...',
 };
 
-// --- TECHNICAL CONFIGURATION ---
 const GOOGLE_SHEET_ID = '1CofaP4ZhFqFBVAktX6MN48oa75YyEHDW4d8zobx3Az0';
-const SHEET_NAMES = {
-  HIERARCHY: 'Client-Brand-Project',
-  MEDIUM: 'Mediums',
-  MATERIAL: 'Materials',
-};
+const SHEET_NAMES = { HIERARCHY: 'Client-Brand-Project', MEDIUM: 'Mediums', MATERIAL: 'Materials', };
 const LOGO_URL = '/logo.png';
-const MAX_FILENAME_LENGTH = 220; // A safe character limit for most operating systems.
+const MAX_FILENAME_LENGTH = 220;
+const ALLOWED_DOMAIN = '@bake.mx';
 
 const buildSheetUrl = (sheetName: string): string => `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
 
@@ -120,15 +84,7 @@ const parseListData = (csv: string): ListData[] => {
 };
 
 // --- REUSABLE UI COMPONENTS ---
-interface SearchableDropdownProps {
-  options: (string | Project | ListData)[];
-  value: string;
-  onChange: (value: string) => void;
-  placeholder: string;
-  label: string;
-  disabled?: boolean;
-}
-
+interface SearchableDropdownProps { options: (string | Project | ListData)[]; value: string; onChange: (value: string) => void; placeholder: string; label: string; disabled?: boolean; }
 const SearchableDropdown: React.FC<SearchableDropdownProps> = ({ options, value, onChange, placeholder, label, disabled = false }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -175,51 +131,41 @@ const SearchableDropdown: React.FC<SearchableDropdownProps> = ({ options, value,
   );
 };
 
-// --- MAIN APP COMPONENT ---
-export default function App() {
-  // State for data fetched from Google Sheets
+// --- MAIN GENERATOR COMPONENT ---
+interface FileNameGeneratorProps {
+  user: User;
+  handleSignOut: () => void;
+}
+const FileNameGenerator: FC<FileNameGeneratorProps> = ({ user, handleSignOut }) => {
   const [hierarchyData, setHierarchyData] = useState<HierarchyData>({});
   const [mediums, setMediums] = useState<ListData[]>([]);
   const [materials, setMaterials] = useState<ListData[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-
-  // State for user selections
   const [selectedClient, setSelectedClient] = useState<string>('');
   const [selectedBrand, setSelectedBrand] = useState<string>('');
   const [selectedProject, setSelectedProject] = useState<string>('');
   const [selectedMedium, setSelectedMedium] = useState<string>('');
   const [selectedMaterial, setSelectedMaterial] = useState<string>('');
-  const [customTextParts, setCustomTextParts] = useState<string[]>(['']);
-  
-  // NEW: State for the size inputs
   const [sizeWidth, setSizeWidth] = useState<string>('');
   const [sizeHeight, setSizeHeight] = useState<string>('');
-  const [sizeUnit, setSizeUnit] = useState<string>('px'); // Default unit
-
-  // State for dependent dropdown options
+  const [sizeUnit, setSizeUnit] = useState<string>('px');
+  const [customTextParts, setCustomTextParts] = useState<string[]>(['']);
   const [availableBrands, setAvailableBrands] = useState<string[]>([]);
   const [availableProjects, setAvailableProjects] = useState<Project[]>([]);
-
-  // State for the final output and UI feedback
   const [generatedName, setGeneratedName] = useState<string>('');
   const [copySuccess, setCopySuccess] = useState<string>('');
   const [isNameTooLong, setIsNameTooLong] = useState<boolean>(false);
-
-  // State for presets
   const [presets, setPresets] = useState<{ [key: string]: Preset }>({});
   const [presetName, setPresetName] = useState<string>('');
   const isLoadingPreset = useRef<boolean>(false);
 
-  // --- DATA FETCHING & INITIALIZATION ---
   useEffect(() => {
-    // Load presets from browser's localStorage on first render
     try {
         const savedPresets = localStorage.getItem('fileNameGeneratorPresets');
         if (savedPresets) setPresets(JSON.parse(savedPresets));
     } catch (e) { console.error("Could not load presets", e); }
     
-    // Fetch all data from the Google Sheet in parallel
     const fetchData = async () => {
         try {
             const responses = await Promise.all([ fetch(buildSheetUrl(SHEET_NAMES.HIERARCHY)), fetch(buildSheetUrl(SHEET_NAMES.MEDIUM)), fetch(buildSheetUrl(SHEET_NAMES.MATERIAL)), ]);
@@ -234,65 +180,34 @@ export default function App() {
     fetchData();
   }, []);
 
-  // --- DEPENDENT DROPDOWN LOGIC ---
-  // This effect runs when the selected client changes.
   useEffect(() => {
     if (isLoadingPreset.current) return;
     setAvailableBrands(selectedClient ? Object.keys(hierarchyData[selectedClient]?.brands || {}) : []);
     setSelectedBrand('');
   }, [selectedClient, hierarchyData]);
 
-  // This effect runs when the selected brand changes.
   useEffect(() => {
     if (isLoadingPreset.current) return;
     setAvailableProjects(selectedBrand ? hierarchyData[selectedClient]?.brands[selectedBrand]?.projects || [] : []);
     setSelectedProject('');
   }, [selectedBrand, selectedClient, hierarchyData]);
   
-  // --- FILENAME GENERATION & VALIDATION ---
-  // This is the core logic. It runs whenever any input changes.
   useEffect(() => {
-    // Helper to get an abbreviation or fall back to the full name
     const getAbbr = (value: string, list: ListData[]) => (list.find(item => item.name === value)?.abbr || value).toUpperCase();
-    
-    // Get abbreviations for the hierarchy
     const clientAbbr = (hierarchyData[selectedClient]?.abbr || selectedClient).toUpperCase();
     const brandAbbr = (hierarchyData[selectedClient]?.brands[selectedBrand]?.abbr || selectedBrand).toUpperCase();
     const projectAbbr = (availableProjects.find(p => p.name === selectedProject)?.abbr || selectedProject).toUpperCase();
-    
-    // NEW: Format the size component. It only adds it if both width and height are present.
     const sizeComponent = sizeWidth && sizeHeight ? `${sizeWidth}x${sizeHeight}${sizeUnit}` : '';
-
-    // Format custom variable parts
     const formatPart = (part: string) => (part || '').trim().replace(/\s+/g, '-').toUpperCase();
     const formattedCustomParts = customTextParts.map(formatPart).filter(p => p);
-
-    // Assemble all parts of the filename
-    const parts = [ 
-      clientAbbr, 
-      brandAbbr, 
-      projectAbbr, 
-      getAbbr(selectedMedium, mediums), 
-      getAbbr(selectedMaterial, materials),
-      sizeComponent, // Add the new size component here
-      ...formattedCustomParts, 
-    ];
-    
-    // Join all non-empty parts with an underscore
+    const parts = [ clientAbbr, brandAbbr, projectAbbr, getAbbr(selectedMedium, mediums), getAbbr(selectedMaterial, materials), sizeComponent, ...formattedCustomParts, ];
     const finalName = parts.filter(p => p && p.toUpperCase() !== 'N/A').join('_');
-    
     setGeneratedName(finalName);
-    
-    // NEW: Check if the generated name exceeds the character limit
     setIsNameTooLong(finalName.length > MAX_FILENAME_LENGTH);
-
   }, [selectedClient, selectedBrand, selectedProject, selectedMedium, selectedMaterial, sizeWidth, sizeHeight, sizeUnit, customTextParts, hierarchyData, mediums, materials, availableProjects]);
-
-  // --- HANDLER FUNCTIONS ---
 
   const handleSavePreset = () => {
     if (!presetName.trim()) { alert("Por favor, ingresa un nombre para el preset."); return; }
-    // NEW: The preset now saves the size fields instead of the year
     const newPreset: Preset = { name: presetName, values: { selectedClient, selectedBrand, selectedProject, selectedMedium, selectedMaterial, sizeWidth, sizeHeight, sizeUnit, customTextParts } };
     const updatedPresets = { ...presets, [presetName]: newPreset };
     setPresets(updatedPresets);
@@ -303,134 +218,8 @@ export default function App() {
   const handleLoadPreset = (name: string) => {
     const preset = presets[name];
     if (!preset) return;
-
     isLoadingPreset.current = true;
-
     const { values } = preset;
     setSelectedClient(values.selectedClient || '');
     setSelectedMedium(values.selectedMedium || '');
-    setSelectedMaterial(values.selectedMaterial || '');
-    // NEW: Load size fields from the preset
-    setSizeWidth(values.sizeWidth || '');
-    setSizeHeight(values.sizeHeight || '');
-    setSizeUnit(values.sizeUnit || 'px');
-    setCustomTextParts(values.customTextParts || ['']);
-    
-    // This sequence with timeouts ensures that dependent dropdowns populate correctly before setting their value.
-    setTimeout(() => {
-        setSelectedBrand(values.selectedBrand || '');
-        setTimeout(() => {
-            setSelectedProject(values.selectedProject || '');
-            // Unlock effects after all states are set
-            setTimeout(() => {
-                isLoadingPreset.current = false;
-            }, 50);
-        }, 0);
-    }, 0);
-  };
-
-  const handleDeletePreset = (name: string) => {
-      const { [name]: _, ...remainingPresets } = presets;
-      setPresets(remainingPresets);
-      localStorage.setItem('fileNameGeneratorPresets', JSON.stringify(remainingPresets));
-  };
-  
-  const handleAddPart = () => setCustomTextParts([...customTextParts, '']);
-  const handleRemovePart = (i: number) => setCustomTextParts(customTextParts.filter((_, idx) => idx !== i));
-  const handlePartChange = (i: number, val: string) => setCustomTextParts(customTextParts.map((p, idx) => (idx === i ? val : p)));
-  
-  const handleCopy = () => {
-      if (!generatedName || isNameTooLong) return; // Also disable copy if name is too long
-      const textArea = document.createElement('textarea');
-      textArea.value = generatedName;
-      textArea.style.position = 'fixed';
-      textArea.style.opacity = '0';
-      document.body.appendChild(textArea);
-      textArea.select();
-      try {
-        document.execCommand('copy');
-        setCopySuccess(TEXTS.STATUS_COPIED);
-        setTimeout(() => setCopySuccess(''), 2000);
-      } catch (err) { 
-        console.error('Failed to copy text: ', err);
-        setCopySuccess(TEXTS.STATUS_FAILED);
-        setTimeout(() => setCopySuccess(''), 2000);
-      }
-      document.body.removeChild(textArea);
-  };
-
-  // --- RENDER LOGIC ---
-
-  if (isLoading) return <div className="flex items-center justify-center h-screen bg-white text-gray-800">{TEXTS.LOADING}</div>;
-  if (error) return <div className="flex items-center justify-center h-screen bg-white text-red-600 p-8">{error}</div>;
-
-  return (
-    <div className="bg-white text-gray-800 min-h-screen font-sans flex justify-center p-4 sm:p-6">
-      <div className="w-full max-w-5xl mx-auto">
-        {/* NEW: Updated header layout */}
-        <header className="text-center mb-10 flex flex-col items-center justify-center gap-4">
-          <img src={LOGO_URL} alt="Logo" className="h-24 w-auto object-contain" />
-          <h1 className="text-4xl font-bold text-[#eb1564]">{TEXTS.TITLE}</h1>
-        </header>
-        
-        <main className="bg-gray-50/50 p-6 sm:p-8 rounded-2xl shadow-lg border border-gray-200">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-8 mb-8">
-            <SearchableDropdown label={TEXTS.CLIENT} options={Object.keys(hierarchyData)} value={selectedClient} onChange={setSelectedClient} placeholder={TEXTS.SELECT_PLACEHOLDER}/>
-            <SearchableDropdown label={TEXTS.BRAND} options={availableBrands} value={selectedBrand} onChange={setSelectedBrand} placeholder={TEXTS.SELECT_PLACEHOLDER} disabled={!selectedClient}/>
-            <SearchableDropdown label={TEXTS.PROJECT} options={availableProjects} value={selectedProject} onChange={setSelectedProject} placeholder={TEXTS.SELECT_PLACEHOLDER} disabled={!selectedBrand}/>
-            <SearchableDropdown label={TEXTS.MEDIUM} options={mediums} value={selectedMedium} onChange={setSelectedMedium} placeholder={TEXTS.SELECT_PLACEHOLDER} />
-            <SearchableDropdown label={TEXTS.MATERIAL} options={materials} value={selectedMaterial} onChange={setSelectedMaterial} placeholder={TEXTS.SELECT_PLACEHOLDER} />
-            
-            {/* NEW: Size input section */}
-            <div className="lg:col-span-3">
-              <label className="mb-2 text-sm font-medium text-gray-500">{TEXTS.SIZE}</label>
-              <div className="grid grid-cols-3 gap-2 mt-2">
-                <input type="number" value={sizeWidth} onChange={(e) => setSizeWidth(e.target.value)} placeholder={TEXTS.SIZE_WIDTH} className="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5" />
-                <input type="number" value={sizeHeight} onChange={(e) => setSizeHeight(e.target.value)} placeholder={TEXTS.SIZE_HEIGHT} className="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5" />
-                <select value={sizeUnit} onChange={(e) => setSizeUnit(e.target.value)} className="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5">
-                    <option value="px">px</option>
-                    <option value="cm">cm</option>
-                    <option value="mm">mm</option>
-                    <option value="in">in</option>
-                </select>
-              </div>
-            </div>
-          </div>
-          
-          <div className="mb-8">
-            <label className="text-sm font-medium text-gray-500">{TEXTS.VARIABLE}</label>
-            <p className="text-xs text-gray-400 mb-2">{TEXTS.VARIABLE_EXAMPLE}</p>
-            {customTextParts.map((part, index) => (<div key={index} className="flex items-center gap-2 mt-2"><input type="text" value={part} onChange={(e) => handlePartChange(index, e.target.value)} placeholder={`${TEXTS.VARIABLE} ${index + 1}`} className="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5" /><button onClick={index === customTextParts.length - 1 ? handleAddPart : () => handleRemovePart(index)} className={`flex-shrink-0 w-10 h-10 flex items-center justify-center font-bold rounded-lg transition-colors text-white ${index === customTextParts.length - 1 ? 'bg-[#eb1564] hover:opacity-90' : 'bg-gray-500 hover:bg-gray-600'}`}>{index === customTextParts.length - 1 ? '+' : '−'}</button></div>))}
-          </div>
-
-          <div className="bg-gray-100 p-6 rounded-xl border border-gray-200">
-             <div className="flex justify-between items-center"><p className="text-sm text-gray-500 font-medium">{TEXTS.OUTPUT_TITLE}</p>{copySuccess && <p className="text-sm text-[#eb1564] font-semibold">{copySuccess}</p>}</div>
-            <div className="flex items-center gap-4 mt-2">
-                <p className="w-full font-mono text-lg text-[#eb1564] bg-white p-3 rounded-md border border-gray-300 break-all h-14 flex items-center">{generatedName || TEXTS.OUTPUT_PLACEHOLDER}</p>
-                <button onClick={handleCopy} className="flex-shrink-0 bg-[#eb1564] hover:opacity-90 disabled:bg-gray-300 text-white font-bold py-3 px-5 rounded-lg" disabled={!generatedName || isNameTooLong}><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></button>
-            </div>
-            {/* NEW: Character count and warning message */}
-            <div className="mt-2 text-right text-xs">
-                {isNameTooLong ? (
-                    <p className="text-red-500 font-semibold">{TEXTS.CHAR_LIMIT_WARNING_PREFIX}{generatedName.length}{TEXTS.CHAR_LIMIT_WARNING_SUFFIX}</p>
-                ) : (
-                    <p className="text-gray-400">{generatedName.length} / {MAX_FILENAME_LENGTH}</p>
-                )}
-            </div>
-          </div>
-
-          {/* NEW: Presets section moved to the bottom */}
-          <div className="mt-8 p-4 bg-white rounded-lg border border-gray-200">
-             <h2 className="text-lg font-semibold text-gray-700 mb-3">{TEXTS.PRESETS_TITLE}</h2>
-             <div className="flex flex-col sm:flex-row flex-wrap gap-4 items-end">
-                <div className="w-full sm:flex-grow"><label className="text-sm text-gray-500 block mb-1">{TEXTS.PRESETS_LOAD}</label><select onChange={(e) => handleLoadPreset(e.target.value)} value="" className="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5"><option value="">{TEXTS.SELECT_PLACEHOLDER}</option>{Object.keys(presets).map(name => <option key={name} value={name}>{name}</option>)}</select></div>
-                <div className="w-full sm:flex-grow"><label className="text-sm text-gray-500 block mb-1">{TEXTS.PRESETS_SAVE}</label><input type="text" value={presetName} onChange={e => setPresetName(e.target.value)} placeholder={TEXTS.PRESETS_SAVE_PLACEHOLDER} className="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5" /></div>
-                <button onClick={handleSavePreset} className="w-full sm:w-auto bg-[#eb1564] hover:opacity-90 text-white font-bold py-2.5 px-4 rounded-lg flex-shrink-0">{TEXTS.PRESETS_SAVE_BUTTON}</button>
-             </div>
-             {Object.keys(presets).length > 0 && <div className="mt-4 flex flex-wrap gap-2">{Object.keys(presets).map(name => (<div key={name} className="flex items-center bg-gray-200 text-gray-700 rounded-full px-3 py-1 text-sm"><span>{name}</span><button onClick={() => handleDeletePreset(name)} className="ml-2 text-red-500 hover:text-red-700 font-bold text-lg leading-none -translate-y-px">&times;</button></div>))}</div>}
-          </div>
-        </main>
-      </div>
-    </div>
-  );
-}
+    setSelectedMaterial(values.selectedMaterial || '
