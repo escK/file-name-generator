@@ -1,7 +1,9 @@
-import React, { useState, useEffect, useRef, FC } from 'react';
-// NEW: Import Firebase services
-import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut, User } from 'firebase/auth';
-import { auth } from './firebase'; // Your firebase config file
+import React, { useState, useEffect, useRef } from 'react';
+// NEW: Import types separately
+import type { FC } from 'react';
+import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from 'firebase/auth';
+import type { User } from 'firebase/auth';
+import { auth } from './firebase';
 
 // --- TYPE DEFINITIONS for TypeScript ---
 interface Project { name: string; abbr: string; }
@@ -85,7 +87,7 @@ const parseListData = (csv: string): ListData[] => {
 
 // --- REUSABLE UI COMPONENTS ---
 interface SearchableDropdownProps { options: (string | Project | ListData)[]; value: string; onChange: (value: string) => void; placeholder: string; label: string; disabled?: boolean; }
-const SearchableDropdown: React.FC<SearchableDropdownProps> = ({ options, value, onChange, placeholder, label, disabled = false }) => {
+const SearchableDropdown: FC<SearchableDropdownProps> = ({ options, value, onChange, placeholder, label, disabled = false }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
