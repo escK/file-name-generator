@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-// NEW: Import types separately
+import { useState, useEffect, useRef } from 'react';
+// The main 'React' import was removed from the line above to fix the build error.
 import type { FC } from 'react';
 import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from 'firebase/auth';
 import type { User } from 'firebase/auth';
