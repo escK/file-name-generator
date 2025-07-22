@@ -14,7 +14,7 @@ interface Preset { name: string; values: { selectedClient: string; selectedBrand
 
 // --- CONFIGURATION & TEXTS (in Spanish) ---
 const TEXTS = {
-  TITLE: 'Generador de Nombres de Archivo',
+  TITLE: 'Generador de Nomenclatura',
   CLIENT: 'Cliente',
   BRAND: 'Marca',
   PROJECT: 'Proyecto',
